@@ -10,6 +10,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"time"
 
 	"github.com/go-interpreter/wagon/exec"
 	"github.com/go-interpreter/wagon/validate"
@@ -42,6 +43,8 @@ func run(w io.Writer, fname string, verify bool) {
 	}
 	defer f.Close()
 
+	readStart := time.Now()
+
 	m, err := wasm.ReadModule(f, importer)
 	if err != nil {
 		log.Fatalf("could not read module: %v", err)
@@ -62,6 +65,10 @@ func run(w io.Writer, fname string, verify bool) {
 	if err != nil {
 		log.Fatalf("could not create VM: %v", err)
 	}
+
+	readElapsed := time.Since(readStart)
+	fmt.Printf("parse time: %s\n", readElapsed)
+	execStart := time.Now()
 
 	for name, e := range m.Export.Entries {
 		i := int64(e.Index)
@@ -92,6 +99,9 @@ func run(w io.Writer, fname string, verify bool) {
 		}
 		fmt.Fprintf(w, "%[1]v (%[1]T)\n", o)
 	}
+
+	execElapsed := time.Since(execStart)
+	fmt.Printf("exec time: %s\n", execElapsed)
 }
 
 func importer(name string) (*wasm.Module, error) {
