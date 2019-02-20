@@ -65,6 +65,7 @@ func run(w io.Writer, fname string, verify bool) {
 	if err != nil {
 		log.Fatalf("could not create VM: %v", err)
 	}
+	vm.RecoverPanic = true
 
 	readElapsed := time.Since(readStart)
 	fmt.Printf("parse time: %s\n", readElapsed)
