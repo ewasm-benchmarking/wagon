@@ -23,6 +23,7 @@ func main() {
 
 	verbose := flag.Bool("v", false, "enable/disable verbose mode")
 	verify := flag.Bool("verify-module", false, "run module verification")
+	wasmFuncName := flag.String("func-name", "main", "called function name")
 
 	flag.Parse()
 
@@ -33,10 +34,10 @@ func main() {
 
 	wasm.SetDebugMode(*verbose)
 
-	run(os.Stdout, flag.Arg(0), *verify)
+	run(os.Stdout, flag.Arg(0), *wasmFuncName, *verify)
 }
 
-func run(w io.Writer, fname string, verify bool) {
+func run(w io.Writer, fname string, wasmFuncName string, verify bool) {
 	f, err := os.Open(fname)
 	if err != nil {
 		log.Fatal(err)
@@ -67,39 +68,21 @@ func run(w io.Writer, fname string, verify bool) {
 	}
 	vm.RecoverPanic = true
 
+	wasmFuncId, res := m.Export.Entries[wasmFuncName]
+	if !res {
+		log.Fatalf("could not find export function")
+	}
+
 	readElapsed := time.Since(readStart)
 	fmt.Printf("parse time: %s\n", readElapsed)
 	execStart := time.Now()
 
-	for name, e := range m.Export.Entries {
-		i := int64(e.Index)
-		fidx := m.Function.Types[int(i)]
-		ftype := m.Types.Entries[int(fidx)]
-		switch len(ftype.ReturnTypes) {
-		case 1:
-			fmt.Fprintf(w, "%s() %s => ", name, ftype.ReturnTypes[0])
-		case 0:
-			fmt.Fprintf(w, "%s() => ", name)
-		default:
-			log.Printf("running exported functions with more than one return value is not supported")
-			continue
-		}
-		if len(ftype.ParamTypes) > 0 {
-			log.Printf("running exported functions with input parameters is not supported")
-			continue
-		}
-		o, err := vm.ExecCode(i)
-		if err != nil {
-			fmt.Fprintf(w, "\n")
-			log.Printf("err=%v", err)
-			continue
-		}
-		if len(ftype.ReturnTypes) == 0 {
-			fmt.Fprintf(w, "\n")
-			continue
-		}
-		fmt.Fprintf(w, "%[1]v (%[1]T)\n", o)
+	o, err := vm.ExecCode(int64(wasmFuncId.Index))
+	if err != nil {
+		log.Fatalf("could not execute requested function: %v", err)
 	}
+
+	fmt.Fprintf(w, "%[1]v (%[1]T)\n", o)
 
 	execElapsed := time.Since(execStart)
 	fmt.Printf("exec time: %s\n", execElapsed)
